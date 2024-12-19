@@ -261,7 +261,7 @@ def _parse_apply():
     )
     parser.add_argument(
         "edited_summary_tsv",
-        type=IsFile,
+        type=Path,
         action="store",
         help=(
             "path to the _summary.tsv that has been edited "
@@ -273,7 +273,7 @@ def _parse_apply():
     )
     parser.add_argument(
         "files_tsv",
-        type=IsFile,
+        type=Path,
         action="store",
         help=(
             "path to the _files.tsv that has been edited "
