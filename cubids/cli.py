@@ -261,7 +261,7 @@ def _parse_apply():
     )
     parser.add_argument(
         "edited_summary_tsv",
-        type=IsFile,
+        type=Path,
         action="store",
         help=(
             "path to the _summary.tsv that has been edited "
@@ -273,7 +273,7 @@ def _parse_apply():
     )
     parser.add_argument(
         "files_tsv",
-        type=IsFile,
+        type=Path,
         action="store",
         help=(
             "path to the _files.tsv that has been edited "
@@ -440,7 +440,7 @@ def _parse_copy_exemplars():
     )
     parser.add_argument(
         "exemplars_dir",
-        type=PathExists,
+        type=Path,
         action="store",
         help=(
             "absolute path to the root of a BIDS dataset "
@@ -451,7 +451,7 @@ def _parse_copy_exemplars():
     )
     parser.add_argument(
         "exemplars_tsv",
-        type=IsFile,
+        type=Path,
         action="store",
         help=(
             "absolute path to the .tsv file that lists one "
@@ -488,6 +488,12 @@ def _parse_copy_exemplars():
         "--container",
         action="store",
         help="Docker image tag or Singularity image file.",
+    )
+    parser.add_argument(
+        "--force-unlock",
+        action="store_true",
+        default=False,
+        help="unlock dataset before adding nifti info ",
     )
     return parser
 
