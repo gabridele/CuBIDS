@@ -777,7 +777,7 @@ def _get_parser():
     """Create the general "cubids" parser object."""
     from cubids import __version__
 
-    parser = argparse.ArgumentParser(prog="cubids")
+    parser = argparse.ArgumentParser(prog="cubids", allow_abbrev=False)
     parser.add_argument("-v", "--version", action="version", version=__version__)
     subparsers = parser.add_subparsers(help="CuBIDS commands")
 
@@ -789,6 +789,7 @@ def _get_parser():
             parents=[subparser],
             help=subparser.description,
             add_help=False,
+            allow_abbrev=False,
         )
 
     return parser
