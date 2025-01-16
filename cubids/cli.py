@@ -718,7 +718,6 @@ def _parse_print_metadata_fields():
     parser = argparse.ArgumentParser(
         description="cubids-print-metadata-fields: print all unique metadata fields",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        allow_abbrev=False,
     )
     PathExists = partial(_path_exists, parser=parser)
 
