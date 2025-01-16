@@ -736,6 +736,11 @@ def _parse_print_metadata_fields():
         action="store",
         help="Docker image tag or Singularity image file.",
     )
+    parser.add_argument(
+        "--container2",
+        action="store",
+        help="Docker image tag or Singularity image file.",
+    )
 
     return parser
 
