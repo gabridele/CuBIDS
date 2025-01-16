@@ -718,6 +718,7 @@ def _parse_print_metadata_fields():
     parser = argparse.ArgumentParser(
         description="cubids-print-metadata-fields: print all unique metadata fields",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        allow_abbrev=False,
     )
     PathExists = partial(_path_exists, parser=parser)
 
@@ -776,7 +777,7 @@ def _get_parser():
     """Create the general "cubids" parser object."""
     from cubids import __version__
 
-    parser = argparse.ArgumentParser(prog="cubids", allow_abbrev=False)
+    parser = argparse.ArgumentParser(prog="cubids")
     parser.add_argument("-v", "--version", action="version", version=__version__)
     subparsers = parser.add_subparsers(help="CuBIDS commands")
 
