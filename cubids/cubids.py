@@ -28,6 +28,7 @@ from cubids import utils
 from cubids.config import load_config, load_schema
 from cubids.constants import NON_KEY_ENTITIES
 from cubids.metadata_merge import check_merging_operations, group_by_acquisition_sets
+from concurrent.futures import ThreadPoolExecutor
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 bids.config.set_option("extension_initial_dot", True)
@@ -473,7 +474,10 @@ class CuBIDS(object):
 
         summary_df = pd.read_table(summary_tsv)
         files_df = pd.read_table(files_tsv)
-
+        if self.force_unlock:
+            # CHANGE TO SUBPROCESS.CALL IF NOT BLOCKING
+            subprocess.run(["datalad", "unlock", "-r"], cwd=self.path)
+            
         # Check that the MergeInto column only contains valid merges
         ok_merges, deletions = check_merging_operations(summary_tsv, raise_on_error=raise_on_error)
 
@@ -521,20 +525,36 @@ class CuBIDS(object):
             # orig key/param tuples that will have new entity set
             to_change = list(entity_sets.keys())
 
-            for row in range(len(files_df)):
-                file_path = self.path + files_df.loc[row, "FilePath"]
-                if Path(file_path).exists() and "/fmap/" not in file_path:
-                    key_param_group = files_df.loc[row, "KeyParamGroup"]
+            # for row in range(len(files_df)):
+            #     file_path = self.path + files_df.loc[row, "FilePath"]
+            #     #if Path(file_path).exists() and "/fmap/" not in file_path:
+            #     if "/fmap/" not in file_path:
+            #         key_param_group = files_df.loc[row, "KeyParamGroup"]
 
-                    if key_param_group in to_change:
-                        orig_key_param = files_df.loc[row, "KeyParamGroup"]
+            #         if key_param_group in to_change:
+            #             orig_key_param = files_df.loc[row, "KeyParamGroup"]
 
-                        new_key = entity_sets[orig_key_param]
+            #             new_key = entity_sets[orig_key_param]
 
-                        new_entities = utils._entity_set_to_entities(new_key)
+            #             new_entities = utils._entity_set_to_entities(new_key)
 
-                        # generate new filenames according to new entity set
-                        self.change_filename(file_path, new_entities)
+            #             # generate new filenames according to new entity set
+            with ThreadPoolExecutor(max_workers=48) as executor:
+                futures = []
+                for row in range(len(files_df)):
+                    file_path = self.path + files_df.loc[row, "FilePath"]
+                    if "/fmap/" not in file_path:
+                        key_param_group = files_df.loc[row, "KeyParamGroup"]
+                        if key_param_group in to_change:
+                            orig_key_param = files_df.loc[row, "KeyParamGroup"]
+                            new_key = entity_sets[orig_key_param]
+                            new_entities = utils._entity_set_to_entities(new_key)
+                            futures.append(
+                                executor.submit(self.change_filename, file_path, new_entities)
+                            )
+                # Optionally, wait for all to complete and raise exceptions if any
+                for future in futures:
+                    future.result()
 
             # create string of mv command ; mv command for dlapi.run
             for from_file, to_file in zip(self.old_filenames, self.new_filenames):
@@ -607,7 +627,7 @@ class CuBIDS(object):
             schema=self.schema,
             is_longitudinal=self.is_longitudinal,
         )
-
+        print('Renaming file from "{}" to "{}"'.format(filepath, new_path))
         exts = Path(filepath).suffixes
         old_ext = "".join(exts)
 
@@ -616,7 +636,7 @@ class CuBIDS(object):
         sub = utils.get_entity_value(filepath, "sub")
         if self.is_longitudinal:
             ses = utils.get_entity_value(filepath, "ses")
-
+        
         # Add the scan path + new path to the lists of old, new filenames
         self.old_filenames.append(filepath)
         self.new_filenames.append(new_path)
@@ -624,8 +644,10 @@ class CuBIDS(object):
         # NOW NEED TO RENAME ASSOCIATED FILES
         # bids_file = self.layout.get_file(filepath)
         bids_file = filepath
+
         # associations = bids_file.get_associations()
         associations = self.get_nifti_associations(str(bids_file))
+        
         for assoc_path in associations:
             # assoc_path = assoc.path
             if Path(assoc_path).exists():
@@ -656,8 +678,8 @@ class CuBIDS(object):
                 self.old_filenames.append(bvec_old)
                 self.new_filenames.append(bvec_new)
 
-        # Update func-specific files
-        # now rename _events and _physio files!
+        # # Update func-specific files
+        # # now rename _events and _physio files!
         old_suffix = parse_file_entities(filepath)["suffix"]
         scan_end = "_" + old_suffix + old_ext
 
@@ -870,6 +892,7 @@ class CuBIDS(object):
             if_scans.append(utils._get_participant_relative_path(self.path + scan))
 
         for path in Path(self.path).rglob("sub-*/*/fmap/*.json"):
+            subprocess.run(["datalad", "unlock", str(path)])
             # json_file = self.layout.get_file(str(path))
             # data = json_file.get_dict()
             data = utils.get_sidecar_metadata(str(path))
@@ -983,13 +1006,20 @@ class CuBIDS(object):
             A list of paths to files associated with the given NIfTI file, excluding
             the NIfTI file itself.
         """
-        # get all assocation files of a nifti image
-        no_ext_file = str(nifti).split("/")[-1].split(".")[0]
-        associations = []
-        for path in Path(self.path).rglob(f"sub-*/**/{no_ext_file}.*"):
-            if ".nii.gz" not in str(path):
-                associations.append(str(path))
+        nifti = Path(nifti)
+        stem = nifti.stem
+        # If .nii.gz, stem will be .nii, so handle double suffix
+        if nifti.suffix == ".gz" and nifti.name.endswith(".nii.gz"):
+            stem = nifti.name[:-7]  # remove .nii.gz
+        else:
+            stem = nifti.stem
 
+        # Use parent directory for more efficient search
+        parent = nifti.parent
+        associations = []
+        for path in parent.glob(f"{stem}.*"):
+            if not str(path).endswith((".nii", ".nii.gz")):
+                associations.append(str(path))
         return associations
 
     def _cache_fieldmaps(self):
